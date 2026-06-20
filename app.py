@@ -220,7 +220,9 @@ def index():
     }
 
     return render_template('index.html', stats=stats, categorized=categorized,
-                           channels=state['channels'])
+                           channels=state['channels'],
+                           health_alive=state['health']['alive'],
+                           health_dead=state['health']['dead'])
 
 
 # ── Routes: Import ──

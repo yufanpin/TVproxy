@@ -208,16 +208,24 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
         <h2>{{ cat }} <span class="badge">{{ entries|length }}频道</span></h2>
         <div class="channel-grid">
           {% for ch_name, urls in entries %}
-          {% set alive = urls|length %}
-          {% set total = channels.get(ch_name, [])|length %}
-          {% set dead = total - alive %}
+          {% set all_urls = channels.get(ch_name, []) %}
+          {% set total = all_urls|length %}
+          {% set alive = all_urls|select('in', health_alive)|list|length %}
+          {% set dead = all_urls|select('in', health_dead)|list|length %}
+          {% set unchecked = total - alive - dead %}
+          {% set health_checked = alive > 0 or dead > 0 %}
           {% set proxy_url = stats.proxy_base ~ '/proxy/' ~ ch_name|urlencode %}
           <div class="channel-item" data-channel="{{ ch_name }}">
             <div class="ch-name">{{ ch_name }}</div>
             <div class="ch-stats">
-              {% if dead > 0 %}<span class="dead">✗{{ dead }}</span>{% endif %}
-              <span class="alive">●{{ alive }}</span>
-              <span class="total">/{{ total }}</span>
+              {% if health_checked %}
+                {% if dead > 0 %}<span class="dead">✗{{ dead }}</span>{% endif %}
+                <span class="alive">●{{ alive }}</span>
+                {% if unchecked > 0 %}<span style="color:#bbb;font-size:11px">({{ unchecked }}待检)</span>{% endif %}
+                <span class="total">/{{ total }}</span>
+              {% else %}
+                <span style="color:#bbb;font-size:11px">待检测</span>
+              {% endif %}
             </div>
           </div>
           {% endfor %}
