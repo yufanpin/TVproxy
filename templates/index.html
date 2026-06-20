@@ -123,8 +123,8 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
   <div>
     <h1>📺 TV<span>proxy</span></h1>
     <div class="subtitle">本地直播源代理 · 自动选最优源 · Failover</div>
-    <div class="proxy-hint">
-      ★ 订阅每频道一条代理URL → 请求时后台自动选最低延迟源 → 302重定向
+    <div class="proxy-hint" id="mode-hint">
+      ★ 订阅每频道一条代理URL → 请求时后台自动选最低延迟源 → <span id="mode-label">{% if relay_mode %}全流量代理(不暴露源URL){% else %}302重定向{% endif %}</span>
     </div>
   </div>
   <div class="stats-bar">
@@ -180,6 +180,10 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
     <a class="btn btn-warning" href="/api/export/txt" download="tvproxy.txt">📥 下载TXT</a>
     <a class="btn btn-warning" href="/api/export/m3u" download="tvproxy.m3u">📥 下载M3U</a>
     <button class="btn btn-outline" onclick="resetAll()">🗑️ 清空</button>
+    <button class="btn {% if relay_mode %}btn-info{% else %}btn-secondary{% endif %}" id="relay-toggle" onclick="toggleRelayMode()" style="{% if not relay_mode %}background:#6c757d;color:#fff{% endif %}">
+      <span id="relay-icon">{% if relay_mode %}🔒{% else %}🔗{% endif %}</span>
+      <span id="relay-label">{% if relay_mode %}代理中(不暴露源){% else %}302重定向{% endif %}</span>
+    </button>
   </div>
 
   <!-- Status -->
@@ -220,7 +224,7 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
           {% set dead = all_urls|select('in', health_dead)|list|length %}
           {% set unchecked = total - alive - dead %}
           {% set health_checked = alive > 0 or dead > 0 %}
-          {% set proxy_url = stats.proxy_base ~ '/proxy/' ~ ch_name|urlencode %}
+          {% set proxy_url = stats.proxy_base ~ ('/relay/' if relay_mode else '/proxy/') ~ ch_name|urlencode %}
           <div class="channel-item" data-channel="{{ ch_name }}">
             <div class="ch-name">{{ ch_name }}</div>
             <div class="ch-stats">
@@ -357,6 +361,46 @@ async function resetAll() {
   if (!confirm('确定清除所有数据？')) return;
   await fetch('/api/reset', {method:'POST'});
   location.reload();
+}
+
+async function toggleRelayMode() {
+  const btn = document.getElementById('relay-toggle');
+  const icon = document.getElementById('relay-icon');
+  const label = document.getElementById('relay-label');
+  const modeLabel = document.getElementById('mode-label');
+  const current = {{ 'true' if relay_mode else 'false' }};
+  const newMode = !current;
+
+  try {
+    const res = await fetch('/api/relay/mode', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({relay_mode: newMode})
+    });
+    const d = await res.json();
+    if (d.success) {
+      if (newMode) {
+        icon.textContent = '🔒';
+        label.textContent = '代理中(不暴露源)';
+        modeLabel.textContent = '全流量代理(不暴露源URL)';
+        btn.className = 'btn btn-info';
+      } else {
+        icon.textContent = '🔗';
+        label.textContent = '302重定向';
+        modeLabel.textContent = '302重定向';
+        btn.className = 'btn btn-secondary';
+        btn.style.background = '#6c757d';
+        btn.style.color = '#fff';
+      }
+      toast('✅ 已切换为' + d.mode_label, 'success');
+      // Reload to refresh all channel links
+      setTimeout(() => location.reload(), 800);
+    } else {
+      toast('❌ ' + (d.error||'切换失败'), 'error');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+  }
 }
 
 async function toggleSchedule() {

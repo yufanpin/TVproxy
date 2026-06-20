@@ -15,7 +15,7 @@ def _channel_logo(channel_name):
     return f'https://raw.githubusercontent.com/fanmingming/live/main/img/tv/{safe_name}.png'
 
 
-def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepath=None):
+def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepath=None, use_relay=False):
     """
     Export channels to M3U format with proxy URLs.
 
@@ -27,11 +27,13 @@ def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepat
         categorized_channels: OrderedDict {category: [(name, [urls]), ...]}
         proxy_base: base URL of the proxy server
         filepath: optional output file path
+        use_relay: if True, use /relay/ instead of /proxy/
 
     Returns:
         str: formatted M3U content
     """
     lines = ['#EXTM3U']
+    path_prefix = '/relay/' if use_relay else '/proxy/'
 
     for cat, entries in categorized_channels.items():
         if not entries:
@@ -42,7 +44,7 @@ def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepat
 
         for ch_name, _ in entries:
             logo = _channel_logo(ch_name)
-            proxy_url = f'{proxy_base}/proxy/{quote(ch_name)}'
+            proxy_url = f'{proxy_base}{path_prefix}{quote(ch_name)}'
             lines.append(
                 f'#EXTINF:-1 tvg-id="{ch_name}" tvg-name="{ch_name}" '
                 f'tvg-logo="{logo}",{ch_name}'

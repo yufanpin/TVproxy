@@ -5,7 +5,7 @@ TVproxy - 电视直播源代理服务
 核心功能：
 1. 导入 TXT/M3U 源文件 → 自动匹配同一频道 → 归类排序
 2. 全量活性检测 → 记录延迟
-3. 请求频道时自动选择延迟最低的源 → 302 重定向
+3. 请求频道时自动选择延迟最低的源 → 302 重定向 或 全流量代理（不暴露源 URL）
 4. 输出统一订阅（TXT/M3U），每频道只一条代理 URL
 5. 输出只包含：央视 + 卫视 + 少儿 + 影视
 """
@@ -17,7 +17,7 @@ import time
 import re
 from datetime import datetime
 from collections import OrderedDict
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 
 from flask import Flask, render_template, request, jsonify, send_file, redirect, Response
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -32,6 +32,7 @@ from importer.txt_import import parse_txt
 from importer.m3u_import import parse_m3u
 from exporter.txt_export import export_txt
 from exporter.m3u_export import export_m3u
+from proxy.relay import build_relay_response, relay_segment
 
 # ── App Setup ──
 app = Flask(__name__)
@@ -70,6 +71,7 @@ state = {
     'scheduler_hour': 6,
     'scheduler_minute': 0,
     'scheduler_job': None,     # APScheduler job reference
+    'relay_mode': False,       # False=302重定向(proxy/)  True=全流量代理(relay/)
 }
 
 
@@ -101,6 +103,7 @@ def save_state():
         'scheduler_enabled': state['scheduler_enabled'],
         'scheduler_hour': state['scheduler_hour'],
         'scheduler_minute': state['scheduler_minute'],
+        'relay_mode': state['relay_mode'],
     }
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -123,6 +126,7 @@ def load_state():
         state['scheduler_enabled'] = data.get('scheduler_enabled', False)
         state['scheduler_hour'] = data.get('scheduler_hour', 6)
         state['scheduler_minute'] = data.get('scheduler_minute', 0)
+        state['relay_mode'] = data.get('relay_mode', False)
     except Exception as e:
         print(f'Load state error: {e}')
 
@@ -232,6 +236,7 @@ def index():
         'scheduler_enabled': state['scheduler_enabled'],
         'scheduler_hour': state['scheduler_hour'],
         'scheduler_minute': state['scheduler_minute'],
+        'relay_mode': state['relay_mode'],
     }
     job = state.get('scheduler_job')
     stats['scheduler_next'] = job.next_run_time.strftime('%Y-%m-%d %H:%M:%S') if job and job.next_run_time else None
@@ -239,7 +244,8 @@ def index():
     return render_template('index.html', stats=stats, categorized=categorized,
                            channels=state['channels'],
                            health_alive=state['health']['alive'],
-                           health_dead=state['health']['dead'])
+                           health_dead=state['health']['dead'],
+                           relay_mode=state['relay_mode'])
 
 
 # ── Routes: Import ──
@@ -495,6 +501,86 @@ def play_channel(channel_name):
     return proxy_channel(channel_name)
 
 
+# ══════════════════════════════════════════════════════════
+# ★ RELAY - 全流量代理（不暴露原始URL）
+# ══════════════════════════════════════════════════════════
+
+@app.route('/relay/<path:channel_name>/seg/<path:segment_path>')
+def relay_segment_route(channel_name, segment_path):
+    """
+    Relay an HLS segment for a channel.
+    Route must be defined before the catch-all /relay/<channel> route.
+    """
+    name = unquote(channel_name).strip()
+    return relay_segment(name, segment_path, get_best_url, request.host_url)
+
+
+@app.route('/relay/<path:channel_name>')
+def relay_channel(channel_name):
+    """
+    Relay endpoint — full traffic proxy, no 302 redirect.
+    The server fetches the source stream and pipes bytes to the client.
+    Original source URL is NEVER exposed to the player.
+
+    Usage: http://localhost:5000/relay/CCTV-1%20%E7%BB%BC%E5%90%88
+    """
+    name = unquote(channel_name).strip()
+
+    if not name:
+        return jsonify({'error': 'Channel name required'}), 400
+
+    best_url = get_best_url(name)
+
+    if not best_url:
+        # Try fuzzy match
+        for ch_name in state['channels']:
+            if name.lower() in ch_name.lower():
+                best_url = get_best_url(ch_name)
+                if best_url:
+                    name = ch_name
+                    break
+
+    if not best_url:
+        add_log('relay', f'❌ {name} - 无可用源')
+        return jsonify({
+            'error': f'No available source for: {name}',
+            'note': 'Import sources first, then run health check'
+        }), 404
+
+    # Build relay response (streams content, no redirect)
+    response = build_relay_response(best_url, name, request.host_url.rstrip('/'))
+
+    # Log the relay
+    latency = state['health']['latencies'].get(best_url)
+    latency_str = f'{latency:.0f}ms' if latency else '无延迟数据'
+    short_url = best_url
+    if len(short_url) > 90:
+        short_url = short_url[:87] + '...'
+    add_log('relay', f'➜ {name}', f'{latency_str} | {short_url}')
+
+    return response
+
+
+@app.route('/api/relay/mode', methods=['GET', 'POST'])
+def relay_mode_api():
+    """Get or toggle relay mode."""
+    if request.method == 'GET':
+        return jsonify({
+            'relay_mode': state['relay_mode'],
+            'mode_label': '全流量代理' if state['relay_mode'] else '302 重定向',
+        })
+
+    data = request.get_json()
+    if not data or 'relay_mode' not in data:
+        return jsonify({'error': 'Missing relay_mode field'}), 400
+
+    state['relay_mode'] = bool(data['relay_mode'])
+    save_state()
+    mode_str = '全流量代理' if state['relay_mode'] else '302 重定向'
+    add_log('system', f'代理模式切换: {mode_str}')
+    return jsonify({'success': True, 'relay_mode': state['relay_mode'], 'mode_label': mode_str})
+
+
 # ── Routes: Export Subscription ──
 
 @app.route('/api/export/txt')
@@ -507,7 +593,8 @@ def export_txt_route():
     proxy_base = request.host_url.rstrip('/')
     output_path = os.path.join(OUTPUT_DIR, 'tvproxy.txt')
     content = export_txt(categorized, proxy_base=proxy_base,
-                         filepath=output_path)
+                         filepath=output_path,
+                         use_relay=state.get('relay_mode', False))
 
     return send_file(
         output_path,
@@ -527,7 +614,8 @@ def export_m3u_route():
     proxy_base = request.host_url.rstrip('/')
     output_path = os.path.join(OUTPUT_DIR, 'tvproxy.m3u')
     content = export_m3u(categorized, proxy_base=proxy_base,
-                         filepath=output_path)
+                         filepath=output_path,
+                         use_relay=state.get('relay_mode', False))
 
     return send_file(
         output_path,
@@ -568,12 +656,13 @@ def channel_detail(channel_name):
     # Sort: alive first, then by latency asc
     url_list.sort(key=lambda x: (not x['alive'], x['latency'] if x['latency'] else 999999))
 
+    path_prefix = '/relay/' if state.get('relay_mode') else '/proxy/'
     return jsonify({
         'name': name,
         'total_urls': len(urls),
         'alive_urls': sum(1 for u in urls if u in state['health']['alive']),
         'dead_urls': sum(1 for u in urls if u in state['health']['dead']),
-        'proxy_url': f'{request.host_url.rstrip("/")}/proxy/{quote(name)}',
+        'proxy_url': f'{request.host_url.rstrip("/")}{path_prefix}{quote(name)}',
         'urls': url_list,
     })
 
@@ -581,10 +670,11 @@ def channel_detail(channel_name):
 def list_channels():
     """List all channels with URL counts and health status."""
     channels = []
+    path_prefix = '/relay/' if state.get('relay_mode') else '/proxy/'
     for name, urls in state['channels'].items():
         alive_count = sum(1 for u in urls if u in state['health']['alive'])
         best_url = get_best_url(name)
-        proxy_url = f'{request.host_url.rstrip("/")}/proxy/{quote(name)}' if best_url else None
+        proxy_url = f'{request.host_url.rstrip("/")}{path_prefix}{quote(name)}' if best_url else None
         channels.append({
             'name': name,
             'total_urls': len(urls),
