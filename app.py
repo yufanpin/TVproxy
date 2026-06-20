@@ -22,7 +22,7 @@ from urllib.parse import unquote
 from flask import Flask, render_template, request, jsonify, send_file, redirect, Response
 
 from channel_manager.matcher import merge_entries, get_merge_stats
-from channel_manager.categorizer import categorize_channels, CATEGORY_ORDER
+from channel_manager.categorizer import categorize_channels, CATEGORY_ORDER, is_target_channel, KEEP_CATEGORIES
 from channel_manager.sorter import sort_channels
 from channel_manager.health import check_urls, pick_best_url
 from channel_manager.normalizer import normalize
@@ -62,7 +62,22 @@ state = {
     'health_running': False,
     'best_cache': {},          # {channel_name: (best_url, cached_at)}
     'BEST_CACHE_TTL': 300,     # 5 min cache for best URL
+    'logs': [],                # ring buffer for activity logs
+    'MAX_LOGS': 500,
 }
+
+
+def add_log(typ, message, detail=''):
+    """Add an entry to the in-memory ring-buffer log."""
+    from datetime import datetime
+    state['logs'].append({
+        'time': datetime.now().strftime('%H:%M:%S'),
+        'type': typ,
+        'message': message,
+        'detail': detail,
+    })
+    if len(state['logs']) > state['MAX_LOGS']:
+        state['logs'] = state['logs'][-state['MAX_LOGS']:]
 
 
 # ── Persistent storage ──
@@ -231,6 +246,7 @@ def import_txt():
     save_state()
 
     stats = get_merge_stats(merged)
+    add_log('import', f'导入 {file.filename}', f'{len(entries)} 条, 合并后 {stats["channels"]} 频道, {stats["total_urls"]} URL')
     return jsonify({'success': True, 'entries': len(entries),
                     'channels': stats['channels'], 'total_urls': stats['total_urls']})
 
@@ -256,6 +272,7 @@ def import_m3u():
     save_state()
 
     stats = get_merge_stats(merged)
+    add_log('import', f'导入 {file.filename}', f'{len(entries)} 条, 合并后 {stats["channels"]} 频道, {stats["total_urls"]} URL')
     return jsonify({'success': True, 'entries': len(entries),
                     'channels': stats['channels'], 'total_urls': stats['total_urls']})
 
@@ -280,6 +297,7 @@ def trigger_health_check():
 
     def run_check():
         try:
+            add_log('health', '开始活性检测', f'检测 {len(all_urls)} 个URL...')
             alive, dead, latencies = check_urls(
                 all_urls, concurrency=30, timeout=5
             )
@@ -290,8 +308,9 @@ def trigger_health_check():
             state['health_running'] = False
             state['best_cache'] = {}  # Clear cache, new data available
             save_state()
+            add_log('health', '活性检测完成', f'存活 {len(alive)}, 失效 {len(dead)}')
         except Exception as e:
-            print(f'Health check error: {e}')
+            add_log('health', '活性检测失败', str(e))
             state['health_running'] = False
 
     thread = threading.Thread(target=run_check, daemon=True)
@@ -346,12 +365,19 @@ def proxy_channel(channel_name):
                 name = matched
 
     if not best_url:
+        add_log('proxy', f'❌ {name} - 无可用源')
         return jsonify({
             'error': f'No available source for: {name}',
             'note': 'Import sources first, then run health check'
         }), 404
 
     # Redirect to the best source
+    latency = state['health']['latencies'].get(best_url)
+    latency_str = f'{latency:.0f}ms' if latency else '无延迟数据'
+    short_url = best_url
+    if len(short_url) > 90:
+        short_url = short_url[:87] + '...'
+    add_log('proxy', f'➜ {name}', f'{latency_str} | {short_url}')
     return redirect(best_url, code=302)
 
 
@@ -427,6 +453,26 @@ def list_sources():
     return jsonify(state['source_files'])
 
 
+@app.route('/api/logs')
+def get_logs():
+    """Get the in-memory activity logs."""
+    return jsonify(state['logs'])
+
+
+@app.route('/logs')
+def log_page():
+    """Render the log viewer page."""
+    stats = {
+        'total_channels': len(state['channels']),
+        'total_urls': sum(len(u) for u in state['channels'].values()),
+        'alive_urls': len(state['health']['alive']),
+        'dead_urls': len(state['health']['dead']),
+        'export_channels': sum(len(e) for e in get_channels_for_export().values()),
+        'proxy_port': 5000,
+    }
+    return render_template('logs.html', stats=stats)
+
+
 @app.route('/api/reset', methods=['POST'])
 def reset():
     """Clear all data."""
@@ -438,12 +484,36 @@ def reset():
     state['health']['last_check'] = None
     state['last_updated'] = None
     state['best_cache'] = {}
+    state['logs'] = []
     save_state()
+    add_log('system', '数据已重置')
     return jsonify({'success': True})
 
 
 # ── Startup ──
 load_state()
+
+# Cleanup: remove channels not in target categories (央视/卫视/少儿/影视)
+before = len(state['channels'])
+state['channels'] = {
+    name: urls for name, urls in state['channels'].items()
+    if is_target_channel(name)
+}
+after = len(state['channels'])
+if before != after:
+    removed = before - after
+    # Also clean stale health data
+    all_alive = set()
+    for urls in state['channels'].values():
+        all_alive.update(urls)
+    state['health']['alive'] = state['health']['alive'] & all_alive
+    state['health']['dead'] = state['health']['dead'] & all_alive
+    state['health']['latencies'] = {
+        u: l for u, l in state['health']['latencies'].items()
+        if u in all_alive
+    }
+    save_state()
+    print(f'  [Cleanup] 移除 {removed} 个非目标频道 → 保留 {after} 个频道')
 
 if __name__ == '__main__':
     print('=' * 55)

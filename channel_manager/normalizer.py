@@ -263,5 +263,5 @@ def normalize(name):
         if p in name and '卫视' not in name:
             return None, True
     
-    # Unknown but keep it (user might add custom mapping)
-    return name, False
+    # Unknown channel → discard (only keep CCTV/卫视/少儿/影视)
+    return None, True

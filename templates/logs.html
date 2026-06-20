@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TVproxy - 运行日志</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;padding:20px 30px}
+.header h1{font-size:24px;font-weight:700}
+.header h1 span{color:#e94560}
+.header .subtitle{font-size:13px;opacity:0.7;margin-top:4px}
+.stats-bar{display:flex;gap:15px;flex-wrap:wrap;background:rgba(255,255,255,0.1);border-radius:10px;padding:12px 20px;margin-top:12px}
+.stat-item{text-align:center}
+.stat-item .num{font-size:22px;font-weight:700}
+.stat-item .label{font-size:11px;opacity:0.7}
+.nav{display:flex;gap:10px;margin-top:10px}
+.nav a{color:rgba(255,255,255,0.7);text-decoration:none;font-size:13px;padding:4px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);transition:all 0.2s}
+.nav a:hover{color:#fff;background:rgba(255,255,255,0.1)}
+.nav a.active{color:#e94560;border-color:#e94560;background:rgba(233,69,96,0.1)}
+
+.container{max-width:1200px;margin:0 auto;padding:20px}
+
+.controls{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+.controls select,.controls input{padding:8px 12px;border-radius:8px;border:1px solid #ddd;font-size:13px;background:#fff}
+.controls select:focus,.controls input:focus{outline:none;border-color:#e94560}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 2px 6px rgba(0,0,0,0.12)}
+.btn-outline{background:#fff;border:1px solid #ddd;color:#666}
+.btn-outline:hover{border-color:#e94560;color:#e94560}
+.btn-danger{background:#e74c3c;color:#fff}
+
+.log-container{background:#1a1a2e;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.15)}
+.log-header{display:flex;justify-content:space-between;align-items:center;background:#0d0d1a;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.log-header h2{color:#fff;font-size:15px;font-weight:600}
+.log-count{color:rgba(255,255,255,0.4);font-size:12px}
+.log-list{max-height:70vh;overflow-y:auto;padding:8px}
+.log-list::-webkit-scrollbar{width:6px}
+.log-list::-webkit-scrollbar-track{background:transparent}
+.log-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:3px}
+
+.log-entry{display:flex;gap:12px;padding:8px 12px;border-radius:8px;font-size:13px;transition:background 0.15s;align-items:flex-start;font-family:'Consolas','Courier New',monospace}
+.log-entry:hover{background:rgba(255,255,255,0.04)}
+.log-entry .time{color:rgba(255,255,255,0.35);white-space:nowrap;font-size:12px;padding-top:1px;min-width:54px}
+.log-entry .badge{font-size:11px;padding:1px 8px;border-radius:4px;font-weight:600;white-space:nowrap;min-width:44px;text-align:center}
+.badge-import{background:rgba(52,152,219,0.2);color:#5dade2}
+.badge-health{background:rgba(46,204,113,0.2);color:#58d68d}
+.badge-proxy{background:rgba(243,156,18,0.2);color:#f5b041}
+.badge-system{background:rgba(231,76,60,0.2);color:#ec7063}
+.log-entry .msg{color:rgba(255,255,255,0.85);flex:1;word-break:break-all}
+.log-entry .detail{color:rgba(255,255,255,0.35);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;flex-shrink:0;text-align:right}
+
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-tag{padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #ddd;background:#fff;color:#666;transition:all 0.15s}
+.filter-tag:hover{border-color:#999;color:#333}
+.filter-tag.active{background:#e94560;color:#fff;border-color:#e94560}
+
+.empty-state{text-align:center;padding:40px;color:rgba(255,255,255,0.3)}
+
+@media(max-width:768px){
+  .header{padding:15px}
+  .stats-bar{justify-content:space-around}
+  .log-entry{flex-wrap:wrap;gap:4px}
+  .log-entry .detail{max-width:100%;text-align:left}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📺 TV<span>proxy</span></h1>
+    <div class="subtitle">后台运行日志 · 实时追踪</div>
+  </div>
+  <div class="stats-bar">
+    <div class="stat-item"><div class="num">{{ stats.total_channels }}</div><div class="label">频道</div></div>
+    <div class="stat-item"><div class="num" style="color:#2ecc71">{{ stats.alive_urls }}</div><div class="label">活跃</div></div>
+    <div class="stat-item"><div class="num" style="color:#e74c3c">{{ stats.dead_urls }}</div><div class="label">失效</div></div>
+    <div class="stat-item"><div class="num">{{ stats.export_channels }}</div><div class="label">输出</div></div>
+  </div>
+  <div class="nav">
+    <a href="/">← 返回首页</a>
+    <a href="/logs" class="active">📋 运行日志</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="controls">
+    <select id="type-filter" onchange="applyFilters()">
+      <option value="all">全部类型</option>
+      <option value="import">导入</option>
+      <option value="health">活性检测</option>
+      <option value="proxy">代理请求</option>
+      <option value="system">系统</option>
+    </select>
+    <input type="text" id="search-text" placeholder="搜索关键字..." oninput="applyFilters()" style="flex:1;min-width:160px">
+    <button class="btn btn-outline" onclick="refreshLogs()">🔄 刷新</button>
+    <button class="btn btn-outline" onclick="toggleAutoRefresh()" id="auto-btn">⏸️ 暂停</button>
+  </div>
+
+  <div class="log-container">
+    <div class="log-header">
+      <h2>📋 运行日志</h2>
+      <span class="log-count" id="log-count">0 条</span>
+    </div>
+    <div class="log-list" id="log-list">
+      <div class="empty-state">正在加载...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let logs = [];
+let autoRefresh = true;
+let autoTimer = null;
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+function getBadgeClass(type) {
+  const map = {'import':'badge-import','health':'badge-health','proxy':'badge-proxy','system':'badge-system'};
+  return map[type] || 'badge-system';
+}
+
+function getTypeLabel(type) {
+  const map = {'import':'导入','health':'检测','proxy':'请求','system':'系统'};
+  return map[type] || type;
+}
+
+async function refreshLogs() {
+  try {
+    const res = await fetch('/api/logs');
+    logs = await res.json();
+    applyFilters();
+  } catch(e) {
+    document.getElementById('log-list').innerHTML = '<div class="empty-state">❌ 加载失败</div>';
+  }
+}
+
+function applyFilters() {
+  const type = document.getElementById('type-filter').value;
+  const search = document.getElementById('search-text').value.toLowerCase().trim();
+
+  let filtered = logs;
+  if (type !== 'all') filtered = filtered.filter(e => e.type === type);
+  if (search) filtered = filtered.filter(e =>
+    e.message.toLowerCase().includes(search) || e.detail.toLowerCase().includes(search)
+  );
+
+  const container = document.getElementById('log-list');
+  document.getElementById('log-count').textContent = filtered.length + ' 条';
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state">暂无匹配日志</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(e => `
+    <div class="log-entry">
+      <span class="time">${escapeHtml(e.time)}</span>
+      <span class="badge ${getBadgeClass(e.type)}">${getTypeLabel(e.type)}</span>
+      <span class="msg">${escapeHtml(e.message)}</span>
+      ${e.detail ? `<span class="detail" title="${escapeHtml(e.detail)}">${escapeHtml(e.detail)}</span>` : ''}
+    </div>
+  `).join('');
+
+  // Auto-scroll to bottom if showing most recent
+  container.scrollTop = container.scrollHeight;
+}
+
+function toggleAutoRefresh() {
+  autoRefresh = !autoRefresh;
+  document.getElementById('auto-btn').textContent = autoRefresh ? '⏸️ 暂停' : '▶️ 自动';
+  if (autoRefresh) {
+    refreshLogs();
+    autoTimer = setInterval(refreshLogs, 3000);
+  } else {
+    clearInterval(autoTimer);
+  }
+}
+
+// Init
+refreshLogs();
+autoTimer = setInterval(refreshLogs, 3000);
+</script>
+</body>
+</html>

@@ -4,13 +4,10 @@ Channel categorization.
 Groups channels into: 央视频道, 卫视频道, 少儿频道, 影视频道, 其他频道
 """
 
-CATEGORY_ORDER = [
-    '央视频道',
-    '卫视频道',
-    '少儿频道',
-    '影视频道',
-    '其他频道',
-]
+# Only these 4 categories are kept during import & export
+KEEP_CATEGORIES = ['央视频道', '卫视频道', '少儿频道', '影视频道']
+
+CATEGORY_ORDER = KEEP_CATEGORIES + ['其他频道']
 
 
 def categorize(name):
@@ -41,6 +38,11 @@ def categorize(name):
     if name.startswith('CGTN'):
         return '其他频道'
     return '其他频道'
+
+
+def is_target_channel(name):
+    """Return True if channel belongs to the 4 target categories (央视/卫视/少儿/影视)."""
+    return categorize(name) in KEEP_CATEGORIES
 
 
 def categorize_channels(channels_dict):

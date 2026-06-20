@@ -35,7 +35,7 @@
 | 少儿频道 | 金鹰卡通、卡酷少儿 等 |
 | 影视频道 | CHC 系列、剧场系列、电影/电视剧 等 |
 
-> 订阅输出只包含以上 4 类，不输出「其他频道」类目。
+> ⚠️ 导入时只保留以上 4 类频道，其他频道（CGTN、凤凰卫视 等）在导入阶段直接丢弃，不占用内存。
 
 ### 3. 活性检测 & 延迟测量
 
@@ -92,13 +92,17 @@ TVproxy 收到 /proxy/CCTV-1 综合
 | 路由 | 功能 |
 |------|------|
 | `/` | 仪表盘，查看所有频道状态 |
+| `/logs` | **运行日志**（实时追踪导入、检测、代理请求） |
 | `/api/import/txt` | 上传 TXT 文件（POST） |
 | `/api/import/m3u` | 上传 M3U 文件（POST） |
 | `/api/health/check` | 启动活性检测（POST） |
 | `/api/health/status` | 检测进度查询（GET） |
 | `/api/channels` | 频道列表 JSON |
+| `/api/logs` | 运行日志 JSON 接口 |
 | `/api/sources` | 已导入源文件列表 |
 | `/api/reset` | 清空所有数据（POST） |
+
+日志页面支持按类型过滤（导入/检测/代理/系统）、关键字搜索、3 秒自动刷新，每条代理请求会显示所选的具体源 URL 和延迟。|
 
 ---
 
@@ -126,7 +130,8 @@ TVproxy/
 │   ├── txt_export.py              # TXT 订阅导出
 │   └── m3u_export.py              # M3U 订阅导出
 ├── templates/
-│   └── index.html                 # Web 界面
+│   ├── index.html                 # 仪表盘界面
+│   └── logs.html                  # 运行日志页面
 ├── static/
 └── data/
     ├── sources/                   # 上传的源文件
@@ -171,6 +176,10 @@ http://localhost:5000/api/export/m3u
 - aiohttp>=3.9
 
 ---
+
+## 当前状态（实时）
+
+> 104 频道 / 1510 条源 / 1179 活 / 331 失效（数据实时变化，以实际为准）
 
 ## TODO / 计划
 
