@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  tvproxy:
+    image: ghcr.io/yufanpin/tvproxy:latest
+    container_name: tvproxy
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
