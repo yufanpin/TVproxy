@@ -429,6 +429,44 @@ def export_m3u_route():
 
 # ── Routes: API ──
 
+@app.route('/api/channel/<path:channel_name>')
+def channel_detail(channel_name):
+    """Get detailed info for a single channel, including all URLs with latencies."""
+    name = unquote(channel_name).strip()
+    urls = state['channels'].get(name)
+    if not urls:
+        # Try fuzzy match
+        for ch_name in state['channels']:
+            if name.lower() in ch_name.lower():
+                name = ch_name
+                urls = state['channels'][ch_name]
+                break
+    if not urls:
+        return jsonify({'error': 'Channel not found'}), 404
+
+    from urllib.parse import quote
+    url_list = []
+    for u in urls:
+        alive = u in state['health']['alive']
+        latency = state['health']['latencies'].get(u)
+        url_list.append({
+            'url': u,
+            'alive': alive,
+            'latency': round(latency, 1) if latency else None,
+        })
+
+    # Sort: alive first, then by latency asc
+    url_list.sort(key=lambda x: (not x['alive'], x['latency'] if x['latency'] else 999999))
+
+    return jsonify({
+        'name': name,
+        'total_urls': len(urls),
+        'alive_urls': sum(1 for u in urls if u in state['health']['alive']),
+        'dead_urls': sum(1 for u in urls if u in state['health']['dead']),
+        'proxy_url': f'http://localhost:5000/proxy/{quote(name)}',
+        'urls': url_list,
+    })
+
 @app.route('/api/channels')
 def list_channels():
     """List all channels with URL counts and health status."""
