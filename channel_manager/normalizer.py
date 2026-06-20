@@ -109,6 +109,7 @@ MOVIE_STANDARD = {
     'CHC动作电影': 'CHC动作电影',
     'CHC家庭影院': 'CHC家庭影院',
     'CHC影迷电影': 'CHC影迷电影',
+    'CHC电影': 'CHC电影',
     '超级电影': '超级电影',
     '超级电视剧': '超级电视剧',
     '黑莓电影': '黑莓电影',
@@ -187,6 +188,9 @@ def normalize(name):
     m = re.match(r'^[Cc][Cc][Tt][Vv][\s-]*(.+)', name)
     if m:
         rest = m.group(1).strip()
+        # CCTV-少儿 → CCTV-14 少儿
+        if '少儿' in rest:
+            return CCTV_STANDARD['14'], False
         for kw, std in CCTV_PAID_STANDARD.items():
             if kw in rest:
                 return std, False
