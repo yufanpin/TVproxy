@@ -149,12 +149,12 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
   <div class="subscription-box">
     <h2>📡 统一订阅地址（复制到播放器使用）</h2>
     <div class="sub-url">
-      <span>TXT: http://localhost:5000/api/export/txt</span>
-      <button class="copy-btn" onclick="copyUrl('http://localhost:5000/api/export/txt')">复制</button>
+      <span>TXT: {{ stats.proxy_base }}/api/export/txt</span>
+      <button class="copy-btn" onclick="copyUrl('{{ stats.proxy_base }}/api/export/txt')">复制</button>
     </div>
     <div class="sub-url">
-      <span>M3U: http://localhost:5000/api/export/m3u</span>
-      <button class="copy-btn" onclick="copyUrl('http://localhost:5000/api/export/m3u')">复制</button>
+      <span>M3U: {{ stats.proxy_base }}/api/export/m3u</span>
+      <button class="copy-btn" onclick="copyUrl('{{ stats.proxy_base }}/api/export/m3u')">复制</button>
     </div>
     <div class="sub-hint">
       ★ 每个频道只有一条代理URL，播放时自动从后台多个源中选择最低延迟的源
@@ -211,7 +211,7 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
           {% set alive = urls|length %}
           {% set total = channels.get(ch_name, [])|length %}
           {% set dead = total - alive %}
-          {% set proxy_url = 'http://localhost:5000/proxy/' ~ ch_name|urlencode %}
+          {% set proxy_url = stats.proxy_base ~ '/proxy/' ~ ch_name|urlencode %}
           <div class="channel-item" data-channel="{{ ch_name }}">
             <div class="ch-name">{{ ch_name }}</div>
             <div class="ch-stats">

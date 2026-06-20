@@ -216,7 +216,7 @@ def index():
         'last_health_check': state['health']['last_check'] or '从未',
         'source_files': state['source_files'],
         'health_running': state['health_running'],
-        'proxy_port': 5000,
+        'proxy_base': request.host_url.rstrip('/'),
     }
 
     return render_template('index.html', stats=stats, categorized=categorized,
@@ -396,8 +396,9 @@ def export_txt_route():
     if not categorized:
         return jsonify({'error': 'No channels to export'}), 400
 
+    proxy_base = request.host_url.rstrip('/')
     output_path = os.path.join(OUTPUT_DIR, 'tvproxy.txt')
-    content = export_txt(categorized, proxy_base='http://localhost:5000',
+    content = export_txt(categorized, proxy_base=proxy_base,
                          filepath=output_path)
 
     return send_file(
@@ -415,8 +416,9 @@ def export_m3u_route():
     if not categorized:
         return jsonify({'error': 'No channels to export'}), 400
 
+    proxy_base = request.host_url.rstrip('/')
     output_path = os.path.join(OUTPUT_DIR, 'tvproxy.m3u')
-    content = export_m3u(categorized, proxy_base='http://localhost:5000',
+    content = export_m3u(categorized, proxy_base=proxy_base,
                          filepath=output_path)
 
     return send_file(
@@ -463,7 +465,7 @@ def channel_detail(channel_name):
         'total_urls': len(urls),
         'alive_urls': sum(1 for u in urls if u in state['health']['alive']),
         'dead_urls': sum(1 for u in urls if u in state['health']['dead']),
-        'proxy_url': f'http://localhost:5000/proxy/{quote(name)}',
+        'proxy_url': f'{request.host_url.rstrip("/")}/proxy/{quote(name)}',
         'urls': url_list,
     })
 
@@ -474,11 +476,12 @@ def list_channels():
     for name, urls in state['channels'].items():
         alive_count = sum(1 for u in urls if u in state['health']['alive'])
         best_url = get_best_url(name)
+        proxy_url = f'{request.host_url.rstrip("/")}/proxy/{quote(name)}' if best_url else None
         channels.append({
             'name': name,
             'total_urls': len(urls),
             'alive_urls': alive_count,
-            'proxy_url': f'http://localhost:5000/proxy/{name}' if best_url else None,
+            'proxy_url': proxy_url,
             'has_source': best_url is not None,
         })
     channels.sort(key=lambda x: x['name'])
@@ -506,7 +509,7 @@ def log_page():
         'alive_urls': len(state['health']['alive']),
         'dead_urls': len(state['health']['dead']),
         'export_channels': sum(len(e) for e in get_channels_for_export().values()),
-        'proxy_port': 5000,
+        'proxy_base': request.host_url.rstrip('/'),
     }
     return render_template('logs.html', stats=stats)
 
