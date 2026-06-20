@@ -35,7 +35,9 @@
 | 少儿频道 | 金鹰卡通、卡酷少儿 等 |
 | 影视频道 | CHC 系列、剧场系列、电影/电视剧 等 |
 
-> ⚠️ 导入时只保留以上 4 类频道，其他频道（CGTN、凤凰卫视 等）在导入阶段直接丢弃，不占用内存。
+> ⚠️ 导入时只保留以上 4 类频道，其他频道（CGTN、凤凰卫视 等）在导入阶段直接丢弃。
+
+> 💡 订阅 URL 自动使用你的访问地址（`request.host_url`），无论通过 `localhost`、内网 IP 还是域名访问，导出的代理 URL 都正确可用。
 
 ### 3. 活性检测 & 延迟测量
 
@@ -82,8 +84,8 @@ TVproxy 收到 /proxy/CCTV-1 综合
 
 | 格式 | 地址 | 说明 |
 |------|------|------|
-| **TXT** | `http://localhost:5000/api/export/txt` | 标准 txt 源格式，每频道一条 `频道名,http://localhost:5000/proxy/频道名` |
-| **M3U** | `http://localhost:5000/api/export/m3u` | 标准 M3U 格式，含 tvg-id/tvg-name/tvg-logo |
+| **TXT** | `http://<你的IP>:5000/api/export/txt` | 标准 txt 源格式，每频道一条 `频道名,http://<IP>:5000/proxy/频道名` |
+| **M3U** | `http://<你的IP>:5000/api/export/m3u` | 标准 M3U 格式，含 tvg-id/tvg-name/tvg-logo |
 
 > 支持 PotPlayer、VLC、Kodi、IPTV 等任意播放器直接打开链接。
 
@@ -171,6 +173,7 @@ docker stop tvproxy && docker rm tvproxy
 ```
 
 > 支持 x86_64 和 arm64（路由器/NAS/树莓派通用）。GitHub Actions 自动编译推送到 GHCR。
+> 容器设置了 `--restart unless-stopped` / `restart: unless-stopped`，宿主机重启后自动拉起。
 
 ### 方式二：本地 Python
 
@@ -193,9 +196,17 @@ python app.py
 
 ### 订阅地址（在播放器中添加）
 
+订阅 URL 自动使用你的访问地址，无需手动修改：
+
 ```
-TXT: http://localhost:5000/api/export/txt
-M3U: http://localhost:5000/api/export/m3u
+TXT: http://<路由器IP>:5000/api/export/txt
+M3U: http://<路由器IP>:5000/api/export/m3u
+```
+
+示例（路由器 IP 为 192.168.10.1）：
+```
+TXT: http://192.168.10.1:5000/api/export/txt
+M3U: http://192.168.10.1:5000/api/export/m3u
 ```
 
 ---
