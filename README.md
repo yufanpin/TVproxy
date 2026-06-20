@@ -129,6 +129,11 @@ TVproxy/
 │   ├── __init__.py
 │   ├── txt_export.py              # TXT 订阅导出
 │   └── m3u_export.py              # M3U 订阅导出
+├── Dockerfile                     # Docker 多架构镜像
+├── docker-compose.yml             # Docker Compose 一键启动
+├── .dockerignore
+├── .github/workflows/
+│   └── docker.yml                 # Actions: 自动编译 amd64+arm64 → GHCR
 ├── templates/
 │   ├── index.html                 # 仪表盘界面
 │   └── logs.html                  # 运行日志页面
@@ -143,6 +148,31 @@ TVproxy/
 ---
 
 ## 快速开始
+
+### 方式一：Docker（推荐）
+
+```bash
+# 拉取镜像（首次）
+docker pull ghcr.io/yufanpin/tvproxy:latest
+
+# 启动
+docker run -d -p 5000:5000 --restart unless-stopped \
+  -v ./data:/app/data --name tvproxy ghcr.io/yufanpin/tvproxy:latest
+
+# 或使用 docker compose
+docker compose up -d
+```
+
+更新镜像：
+```bash
+docker pull ghcr.io/yufanpin/tvproxy:latest
+docker stop tvproxy && docker rm tvproxy
+# 重新执行上面的 docker run 命令
+```
+
+> 支持 x86_64 和 arm64（路由器/NAS/树莓派通用）。GitHub Actions 自动编译推送到 GHCR。
+
+### 方式二：本地 Python
 
 ```bash
 # 1. 安装依赖
@@ -161,10 +191,11 @@ python app.py
 #    http://localhost:5000
 ```
 
-在播放器中添加订阅：
+### 订阅地址（在播放器中添加）
+
 ```
-http://localhost:5000/api/export/txt
-http://localhost:5000/api/export/m3u
+TXT: http://localhost:5000/api/export/txt
+M3U: http://localhost:5000/api/export/m3u
 ```
 
 ---
@@ -184,7 +215,7 @@ http://localhost:5000/api/export/m3u
 ## TODO / 计划
 
 - [ ] IPTV 回源代理（全流量代理，不暴露原始 URL）
-- [ ] Docker 镜像支持
+- [x] ~~Docker 镜像支持~~（✅ 已支持 x86 + arm64，自动推送到 GHCR）
 - [ ] 定时自动活性检测
 - [ ] 频道收藏/自定义排序
 - [ ] 多端口监听（HTTP/HTTPS）
