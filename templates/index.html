@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TVproxy - 直播源代理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);color:#fff;padding:20px 30px}
+.header h1{font-size:24px;font-weight:700}
+.header h1 span{color:#e94560}
+.header .subtitle{font-size:13px;opacity:0.7;margin-top:4px}
+.header .proxy-hint{margin-top:8px;font-size:12px;opacity:0.6;}
+.stats-bar{display:flex;gap:15px;flex-wrap:wrap;background:rgba(255,255,255,0.1);border-radius:10px;padding:12px 20px;margin-top:12px}
+.stat-item{text-align:center}
+.stat-item .num{font-size:22px;font-weight:700}
+.stat-item .label{font-size:11px;opacity:0.7}
+
+.container{max-width:1400px;margin:0 auto;padding:20px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;text-decoration:none}
+.btn:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-primary{background:#e94560;color:#fff}
+.btn-success{background:#2ecc71;color:#fff}
+.btn-info{background:#3498db;color:#fff}
+.btn-warning{background:#f39c12;color:#fff}
+.btn-danger{background:#e74c3c;color:#fff}
+.btn-outline{background:transparent;border:2px solid #ddd;color:#666}
+.btn-outline:hover{border-color:#999;color:#333}
+.file-input-wrapper{position:relative;overflow:hidden}
+.file-input-wrapper input[type=file]{position:absolute;left:0;top:0;opacity:0;width:100%;height:100%;cursor:pointer}
+
+.subscription-box{
+  background:#fff;border-radius:12px;padding:20px;margin-bottom:20px;
+  box-shadow:0 1px 4px rgba(0,0,0,0.08);border:2px solid #e94560;
+}
+.subscription-box h2{font-size:15px;color:#e94560;margin-bottom:12px}
+.sub-url{background:#1a1a2e;color:#2ecc71;padding:10px 14px;border-radius:8px;font-family:'Consolas','Courier New',monospace;font-size:13px;word-break:break-all;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sub-url .copy-btn{background:rgba(255,255,255,0.1);color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;flex-shrink:0}
+.sub-url .copy-btn:hover{background:rgba(255,255,255,0.2)}
+.sub-hint{font-size:12px;color:#999;margin-top:6px}
+
+.card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:16px}
+.card h2{font-size:16px;color:#555;margin-bottom:15px;display:flex;align-items:center;gap:8px}
+.card h2 .badge{background:#e94560;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;margin-left:6px}
+
+.channel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
+.channel-item{background:#f8f9fa;border-radius:8px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;transition:all 0.15s;border-left:3px solid transparent}
+.channel-item:hover{background:#eef1f5}
+.channel-item .ch-name{font-size:13px;font-weight:600;color:#333}
+.channel-item .ch-stats{display:flex;gap:8px;align-items:center;font-size:11px}
+.channel-item .alive{color:#2ecc71;font-weight:600}
+.channel-item .dead{color:#e74c3c;font-weight:600}
+.channel-item .total{color:#999}
+
+.empty-state{text-align:center;padding:60px 20px;color:#999}
+.empty-state h3{font-size:20px;margin-bottom:10px}
+.empty-state p{font-size:14px}
+
+.toast{position:fixed;top:20px;right:20px;z-index:9999;padding:14px 24px;border-radius:10px;color:#fff;font-weight:600;font-size:14px;box-shadow:0 4px 20px rgba(0,0,0,0.2);transform:translateX(120%);transition:transform 0.3s ease;max-width:400px}
+.toast.show{transform:translateX(0)}
+.toast.success{background:#2ecc71}
+.toast.error{background:#e74c3c}
+.toast.info{background:#3498db}
+
+.health-progress{display:none;margin:10px 0}
+.health-bar{width:100%;height:6px;background:#eee;border-radius:3px;overflow:hidden}
+.health-bar-fill{height:100%;background:linear-gradient(90deg,#3498db,#2ecc71);width:0%;transition:width 0.3s}
+
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-radius:50%;border-top-color:#fff;animation:spin 0.6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.tab{padding:8px 18px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;cursor:pointer;background:#e8e8e8;color:#666;border:none;transition:all 0.15s}
+.tab.active{background:#fff;color:#333}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+@media(max-width:768px){
+  .header{padding:15px}
+  .stats-bar{justify-content:space-around}
+  .channel-grid{grid-template-columns:1fr}
+  .sub-url{font-size:11px;flex-direction:column;align-items:stretch}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📺 TV<span>proxy</span></h1>
+    <div class="subtitle">本地直播源代理 · 自动选最优源 · Failover</div>
+    <div class="proxy-hint">
+      ★ 订阅每频道一条代理URL → 请求时后台自动选最低延迟源 → 302重定向
+    </div>
+  </div>
+  <div class="stats-bar">
+    <div class="stat-item"><div class="num" id="stat-ch">{{ stats.total_channels }}</div><div class="label">频道</div></div>
+    <div class="stat-item"><div class="num" id="stat-url">{{ stats.total_urls }}</div><div class="label">总源</div></div>
+    <div class="stat-item"><div class="num" style="color:#2ecc71">{{ stats.alive_urls }}</div><div class="label">活跃</div></div>
+    <div class="stat-item"><div class="num" style="color:#e74c3c">{{ stats.dead_urls }}</div><div class="label">失效</div></div>
+    <div class="stat-item"><div class="num" style="color:#f39c12">{{ stats.export_channels }}</div><div class="label">输出频道</div></div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Subscription Links -->
+  <div class="subscription-box">
+    <h2>📡 统一订阅地址（复制到播放器使用）</h2>
+    <div class="sub-url">
+      <span>TXT: http://localhost:5000/api/export/txt</span>
+      <button class="copy-btn" onclick="copyUrl('http://localhost:5000/api/export/txt')">复制</button>
+    </div>
+    <div class="sub-url">
+      <span>M3U: http://localhost:5000/api/export/m3u</span>
+      <button class="copy-btn" onclick="copyUrl('http://localhost:5000/api/export/m3u')">复制</button>
+    </div>
+    <div class="sub-hint">
+      ★ 每个频道只有一条代理URL，播放时自动从后台多个源中选择最低延迟的源
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <div class="btn btn-primary file-input-wrapper">
+      📂 导入TXT
+      <input type="file" accept=".txt" onchange="importFile('txt',this)">
+    </div>
+    <div class="btn btn-info file-input-wrapper">
+      📂 导入M3U
+      <input type="file" accept=".m3u,.m3u8" onchange="importFile('m3u',this)">
+    </div>
+    <button class="btn btn-success" id="health-btn" onclick="startHealthCheck()">
+      <span id="health-icon">🔍</span> 活性检测
+    </button>
+    <a class="btn btn-warning" href="/api/export/txt" download="tvproxy.txt">📥 下载TXT</a>
+    <a class="btn btn-warning" href="/api/export/m3u" download="tvproxy.m3u">📥 下载M3U</a>
+    <button class="btn btn-outline" onclick="resetAll()">🗑️ 清空</button>
+  </div>
+
+  <!-- Status -->
+  <div style="font-size:12px;color:#999;margin-bottom:16px">
+    源文件: {{ stats.source_files|length }}个
+    {% if stats.last_updated and stats.last_updated != '从未' %}
+    · 更新: {{ stats.last_updated[:10] }}
+    {% endif %}
+    · 活性检测: <span id="health-date">{{ stats.last_health_check[:10] if stats.last_health_check and stats.last_health_check != '从未' else '从未' }}</span>
+    <span id="health-spin" style="display:none"><span class="spinner"></span> 检测中...</span>
+  </div>
+
+  <!-- Health progress -->
+  <div class="health-progress card" id="health-progress">
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+      <span id="hp-text">活性检测中...</span>
+      <span id="hp-pct">0%</span>
+    </div>
+    <div class="health-bar"><div class="health-bar-fill" id="hp-bar"></div></div>
+  </div>
+
+  <!-- Channel list -->
+  {% if categorized %}
+  <div class="tabs" id="cat-tabs"></div>
+  <div id="cat-contents">
+    {% for cat, entries in categorized.items() %}
+    <div class="tab-content" data-cat="{{ cat }}">
+      <div class="card">
+        <h2>{{ cat }} <span class="badge">{{ entries|length }}频道</span></h2>
+        <div class="channel-grid">
+          {% for ch_name, urls in entries %}
+          {% set alive = urls|length %}
+          {% set total = channels.get(ch_name, [])|length %}
+          {% set dead = total - alive %}
+          {% set proxy_url = 'http://localhost:5000/proxy/' ~ ch_name|urlencode %}
+          <div class="channel-item">
+            <div class="ch-name">{{ ch_name }}</div>
+            <div class="ch-stats">
+              {% if dead > 0 %}<span class="dead">✗{{ dead }}</span>{% endif %}
+              <span class="alive">●{{ alive }}</span>
+              <span class="total">/{{ total }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty-state">
+    <h3>📡 还没有直播源</h3>
+    <p>导入 TXT 或 M3U 文件 → TVproxy 自动匹配同一频道 → 归类排序 → 输出统一订阅</p>
+  </div>
+  {% endif %}
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function toast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function copyUrl(url) {
+  navigator.clipboard.writeText(url).then(() => toast('✅ 已复制: ' + url, 'success'))
+    .catch(() => toast('❌ 复制失败', 'error'));
+}
+
+async function importFile(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/import/' + type, {method:'POST', body:fd});
+    const d = await res.json();
+    if (d.success) toast('✅ 导入成功: ' + d.entries + '条, ' + d.channels + '频道', 'success');
+    else toast('❌ ' + (d.error||'导入失败'), 'error');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) { toast('❌ ' + e.message, 'error'); }
+  input.value = '';
+}
+
+async function startHealthCheck() {
+  const btn = document.getElementById('health-btn');
+  const icon = document.getElementById('health-icon');
+  const prog = document.getElementById('health-progress');
+  const bar = document.getElementById('hp-bar');
+  const pct = document.getElementById('hp-pct');
+  const txt = document.getElementById('hp-text');
+  const spin = document.getElementById('health-spin');
+
+  btn.disabled = true;
+  icon.innerHTML = '<span class="spinner"></span>';
+  prog.style.display = 'block';
+  spin.style.display = 'inline';
+
+  try {
+    const res = await fetch('/api/health/check', {method:'POST'});
+    const d = await res.json();
+    if (d.error) { toast('❌ '+d.error,'error'); btn.disabled=false; icon.textContent='🔍'; prog.style.display='none'; spin.style.display='none'; return; }
+    toast('🔍 检测 '+d.total+' 个源...','info');
+
+    const poll = setInterval(async () => {
+      const sr = await fetch('/api/health/status');
+      const st = await sr.json();
+      if (st.running) {
+        const total = d.total||1;
+        const checked = st.alive + st.dead;
+        const p = Math.min(100, Math.round(checked/total*100));
+        bar.style.width = p+'%'; pct.textContent = p+'%';
+        txt.textContent = '检测中... 存活'+st.alive+' / 失效'+st.dead;
+      } else {
+        clearInterval(poll);
+        btn.disabled=false; icon.textContent='🔍'; prog.style.display='none'; spin.style.display='none';
+        toast('✅ 完成: '+st.alive+'活跃 '+st.dead+'失效','success');
+        setTimeout(()=>location.reload(), 1000);
+      }
+    }, 2000);
+  } catch(e) {
+    toast('❌ '+e.message,'error');
+    btn.disabled=false; icon.textContent='🔍'; prog.style.display='none'; spin.style.display='none';
+  }
+}
+
+async function resetAll() {
+  if (!confirm('确定清除所有数据？')) return;
+  await fetch('/api/reset', {method:'POST'});
+  location.reload();
+}
+
+// Tabs
+(function(){
+  const tabs = document.getElementById('cat-tabs');
+  const contents = document.querySelectorAll('.tab-content');
+  if (contents.length <= 1) {
+    if (tabs) tabs.style.display = 'none';
+    if (contents.length === 1) contents[0].classList.add('active');
+    return;
+  }
+  contents.forEach((el, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab' + (i === 0 ? ' active' : '');
+    btn.textContent = el.dataset.cat;
+    btn.onclick = () => {
+      tabs.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+      btn.classList.add('active'); el.classList.add('active');
+    };
+    tabs.appendChild(btn);
+    if (i === 0) el.classList.add('active');
+  });
+})();
+
+{% if stats.health_running %}
+document.getElementById('health-spin').style.display = 'inline';
+{% endif %}
+</script>
+</body>
+</html>
