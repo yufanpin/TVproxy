@@ -20,6 +20,8 @@ from collections import OrderedDict
 from urllib.parse import unquote
 
 from flask import Flask, render_template, request, jsonify, send_file, redirect, Response
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from channel_manager.matcher import merge_entries, get_merge_stats
 from channel_manager.categorizer import categorize_channels, CATEGORY_ORDER, is_target_channel, KEEP_CATEGORIES
@@ -64,6 +66,10 @@ state = {
     'BEST_CACHE_TTL': 300,     # 5 min cache for best URL
     'logs': [],                # ring buffer for activity logs
     'MAX_LOGS': 500,
+    'scheduler_enabled': False,
+    'scheduler_hour': 6,
+    'scheduler_minute': 0,
+    'scheduler_job': None,     # APScheduler job reference
 }
 
 
@@ -92,6 +98,9 @@ def save_state():
         'health_dead': list(state['health']['dead']),
         'health_latencies': state['health']['latencies'],
         'health_last_check': state['health']['last_check'],
+        'scheduler_enabled': state['scheduler_enabled'],
+        'scheduler_hour': state['scheduler_hour'],
+        'scheduler_minute': state['scheduler_minute'],
     }
     with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -111,6 +120,9 @@ def load_state():
         state['health']['dead'] = set(data.get('health_dead', []))
         state['health']['latencies'] = data.get('health_latencies', {})
         state['health']['last_check'] = data.get('health_last_check')
+        state['scheduler_enabled'] = data.get('scheduler_enabled', False)
+        state['scheduler_hour'] = data.get('scheduler_hour', 6)
+        state['scheduler_minute'] = data.get('scheduler_minute', 0)
     except Exception as e:
         print(f'Load state error: {e}')
 
@@ -217,7 +229,12 @@ def index():
         'source_files': state['source_files'],
         'health_running': state['health_running'],
         'proxy_base': request.host_url.rstrip('/'),
+        'scheduler_enabled': state['scheduler_enabled'],
+        'scheduler_hour': state['scheduler_hour'],
+        'scheduler_minute': state['scheduler_minute'],
     }
+    job = state.get('scheduler_job')
+    stats['scheduler_next'] = job.next_run_time.strftime('%Y-%m-%d %H:%M:%S') if job and job.next_run_time else None
 
     return render_template('index.html', stats=stats, categorized=categorized,
                            channels=state['channels'],
@@ -331,6 +348,95 @@ def health_status():
         'dead': len(state['health']['dead']),
         'last_check': state['health']['last_check'],
     })
+
+
+# ── Scheduled Health Check ──
+
+def run_scheduled_check():
+    """Run health check from scheduler (no return, runs in background thread)."""
+    if state['health_running']:
+        return
+
+    all_urls = []
+    for urls in state['channels'].values():
+        all_urls.extend(urls)
+    all_urls = list(set(all_urls))
+    if not all_urls:
+        return
+
+    state['health_running'] = True
+    add_log('scheduler', '定时检测触发', f'检测 {len(all_urls)} 个URL...')
+
+    def _run():
+        try:
+            alive, dead, latencies = check_urls(all_urls, concurrency=30, timeout=5)
+            state['health']['alive'] = alive
+            state['health']['dead'] = dead
+            state['health']['latencies'] = latencies
+            state['health']['last_check'] = datetime.now().isoformat()
+            state['health_running'] = False
+            state['best_cache'] = {}
+            save_state()
+            add_log('scheduler', '定时检测完成', f'存活 {len(alive)}, 失效 {len(dead)}')
+        except Exception as e:
+            add_log('scheduler', '定时检测失败', str(e))
+            state['health_running'] = False
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+
+def init_scheduler():
+    """Initialize or reconfigure the health check scheduler."""
+    if state['scheduler_job']:
+        state['scheduler_job'].remove()
+        state['scheduler_job'] = None
+
+    if not state['scheduler_enabled']:
+        add_log('scheduler', '定时检测已关闭')
+        return
+
+    sched = state.get('_scheduler')
+    if not sched:
+        sched = BackgroundScheduler(daemon=True)
+        state['_scheduler'] = sched
+        sched.start()
+
+    hour = state['scheduler_hour']
+    minute = state['scheduler_minute']
+    trigger = CronTrigger(hour=hour, minute=minute, second=0)
+    state['scheduler_job'] = sched.add_job(
+        run_scheduled_check, trigger, id='health_check_daily',
+        replace_existing=True, name=f'每日 {hour:02d}:{minute:02d} 健康检测'
+    )
+    next_run = state['scheduler_job'].next_run_time
+    add_log('scheduler', f'定时检测已开启', f'每日 {hour:02d}:{minute:02d} 执行' +
+            (f'，下次运行: {next_run.strftime("%m-%d %H:%M")}' if next_run else ''))
+
+
+@app.route('/api/health/schedule', methods=['GET', 'POST'])
+def health_schedule():
+    """Get or update health check schedule config."""
+    if request.method == 'GET':
+        job = state.get('scheduler_job')
+        return jsonify({
+            'enabled': state['scheduler_enabled'],
+            'hour': state['scheduler_hour'],
+            'minute': state['scheduler_minute'],
+            'next_run': job.next_run_time.strftime('%Y-%m-%d %H:%M:%S') if job and job.next_run_time else None,
+        })
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    state['scheduler_enabled'] = bool(data.get('enabled', state['scheduler_enabled']))
+    state['scheduler_hour'] = int(data.get('hour', state['scheduler_hour']))
+    state['scheduler_minute'] = int(data.get('minute', state['scheduler_minute']))
+    save_state()
+    init_scheduler()
+
+    return jsonify({'success': True, 'message': 'Schedule updated'})
 
 
 # ══════════════════════════════════════════════════════════
@@ -557,6 +663,10 @@ if before != after:
     }
     save_state()
     print(f'  [Cleanup] 移除 {removed} 个非目标频道 → 保留 {after} 个频道')
+
+# Initialize daily scheduled health check
+if state['scheduler_enabled']:
+    init_scheduler()
 
 if __name__ == '__main__':
     print('=' * 55)

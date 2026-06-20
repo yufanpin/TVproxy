@@ -1,3 +1,4 @@
 flask>=3.0
 aiohttp>=3.9
 requests>=2.31
+apscheduler>=3.10

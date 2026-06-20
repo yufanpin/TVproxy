@@ -174,6 +174,9 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
     <button class="btn btn-success" id="health-btn" onclick="startHealthCheck()">
       <span id="health-icon">🔍</span> 活性检测
     </button>
+    <button class="btn btn-info" id="sched-btn" onclick="toggleSchedule()">
+      <span id="sched-icon">⏰</span> <span id="sched-label">{% if stats.scheduler_enabled %}定时:{{ '%02d'|format(stats.scheduler_hour) }}:{{ '%02d'|format(stats.scheduler_minute) }}{% else %}定时关{% endif %}</span>
+    </button>
     <a class="btn btn-warning" href="/api/export/txt" download="tvproxy.txt">📥 下载TXT</a>
     <a class="btn btn-warning" href="/api/export/m3u" download="tvproxy.m3u">📥 下载M3U</a>
     <button class="btn btn-outline" onclick="resetAll()">🗑️ 清空</button>
@@ -187,6 +190,9 @@ body{font-family:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-s
     {% endif %}
     · 活性检测: <span id="health-date">{{ stats.last_health_check[:10] if stats.last_health_check and stats.last_health_check != '从未' else '从未' }}</span>
     <span id="health-spin" style="display:none"><span class="spinner"></span> 检测中...</span>
+    {% if stats.scheduler_enabled and stats.scheduler_next %}
+    · 下次检测: <span id="sched-next">{{ stats.scheduler_next }}</span>
+    {% endif %}
   </div>
 
   <!-- Health progress -->
@@ -351,6 +357,25 @@ async function resetAll() {
   if (!confirm('确定清除所有数据？')) return;
   await fetch('/api/reset', {method:'POST'});
   location.reload();
+}
+
+async function toggleSchedule() {
+  const btn = document.getElementById('sched-btn');
+  const label = document.getElementById('sched-label');
+  const enabled = !{{ 'true' if stats.scheduler_enabled else 'false' }};
+  
+  try {
+    const res = await fetch('/api/health/schedule', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: enabled})
+    });
+    const d = await res.json();
+    if (d.success) location.reload();
+    else toast('❌ '+d.error, 'error');
+  } catch(e) {
+    toast('❌ '+e.message, 'error');
+  }
 }
 
 // Tabs

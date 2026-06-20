@@ -226,6 +226,7 @@ M3U: http://192.168.10.1:5000/api/export/m3u
 - 🐛 **修复**: `CCTV-少儿` 被丢弃（数字位数正则不匹配中文"少儿"）
 - 🐛 **修复**: `CHC电影` 被丢弃（MOVIE_STANDARD 无 `CHC电影`，fallback 误杀）
 - 🐛 **修复**: 复制按钮在 HTTP 下无法复制到剪贴板（改用 `execCommand` + textarea 方案）
+- ✨ **新增**: 定时自动活性检测（APScheduler，默认每天 06:00，面板可开关）
 
 ### 2026-06-18
 - 🔧 修正：订阅/代理 URL 改为动态获取 `request.host_url`，不再硬编码 `localhost:5000`
@@ -236,7 +237,7 @@ M3U: http://192.168.10.1:5000/api/export/m3u
 
 - [ ] IPTV 回源代理（全流量代理，不暴露原始 URL）
 - [x] ~~Docker 镜像支持~~（✅ 已支持 x86 + arm64，自动推送到 GHCR）
-- [ ] 定时自动活性检测
+- [x] ~~定时自动活性检测~~（✅ APScheduler，每日可配置时间，面板一键开关）
 - [ ] 频道收藏/自定义排序
 - [ ] 多端口监听（HTTP/HTTPS）
 - [ ] EPG 节目指南支持
