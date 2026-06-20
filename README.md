@@ -163,13 +163,20 @@ TVproxy/
 # 拉取镜像（首次）
 docker pull ghcr.io/yufanpin/tvproxy:latest
 
-# 启动
+# 启动（推荐：named volume，免去路径问题）
 docker run -d -p 5000:5000 --restart unless-stopped \
-  -v ./data:/app/data --name tvproxy ghcr.io/yufanpin/tvproxy:latest
+  -v tvproxy-data:/app/data --name tvproxy ghcr.io/yufanpin/tvproxy:latest
+
+# 或者用绝对路径挂载宿主机目录
+# docker run -d -p 5000:5000 --restart unless-stopped \
+#   -v /root/tvproxy-data:/app/data --name tvproxy ghcr.io/yufanpin/tvproxy:latest
 
 # 或使用 docker compose
 docker compose up -d
 ```
+
+> ⚠️ **注意：** `-v ./data:/app/data` 这种相对路径在 Linux 上会报错
+> `invalid characters for a local volume name`，因为 Docker 把 `./data` 解析成了 volume name 而非路径。**请使用 named volume**（如上 `tvproxy-data`）或**绝对路径**。
 
 更新镜像：
 ```bash
