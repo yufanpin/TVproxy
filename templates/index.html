@@ -267,8 +267,27 @@ function toast(msg, type='info') {
 }
 
 function copyUrl(url) {
-  navigator.clipboard.writeText(url).then(() => toast('✅ 已复制: ' + url, 'success'))
-    .catch(() => toast('❌ 复制失败', 'error'));
+  // execCommand works on plain HTTP; Clipboard API requires HTTPS
+  var ta = document.createElement('textarea');
+  ta.value = url;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  ta.style.top = '-9999px';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    var ok = document.execCommand('copy');
+    if (ok) { toast('✅ 已复制', 'success'); }
+    else { throw new Error('execCommand failed'); }
+  } catch(e) {
+    // Fallback to Clipboard API
+    navigator.clipboard.writeText(url).then(
+      function() { toast('✅ 已复制', 'success'); },
+      function() { toast('❌ 复制失败', 'error'); }
+    );
+  }
+  document.body.removeChild(ta);
 }
 
 async function importFile(type, input) {
