@@ -9,6 +9,16 @@
 
 ## 已实现功能
 
+### 0. ★ 本地频道 Logo 系统
+
+| 功能 | 说明 |
+|------|------|
+| **Logo 收集** | 从 vircloud/TVLogo + wanglindl/TVlogo 仓库收集 105 个台标，覆盖 98/101 频道 |
+| **本地服务** | `GET /logo/<频道名>` 从 `tvlogo/` 目录返回对应 PNG |
+| **M3U 集成** | M3U 导出时 `tvg-logo` 自动指向 `/logo/<频道名>` |
+| **优雅降级** | 无台标的频道返回 1×1 透明 PNG 占位，播放器自动隐藏 |
+| **第三方源** | 支持从 fanmingming/live、mytv-android/myTVlogo 等扩展源补充 |
+
 ### 1. 多源导入 & 自动匹配
 
 | 功能 | 说明 |
@@ -91,26 +101,30 @@ TVproxy 收到 /proxy/CCTV-1 综合
 | 格式 | 地址 | 说明 |
 |------|------|------|
 | **TXT** | `http://<你的IP>:5000/api/export/txt` | 标准 txt 源格式，每频道一条 `频道名,http://<IP>:5000/proxy/频道名` |
-| **M3U** | `http://<你的IP>:5000/api/export/m3u` | 标准 M3U 格式，含 tvg-id/tvg-name/tvg-logo |
+| **M3U** | `http://<你的IP>:5000/api/export/m3u` | 标准 M3U 格式，含 tvg-id/tvg-name/tvg-logo（指向本地 `/logo/<频道名>`） |
 
 > 支持 PotPlayer、VLC、Kodi、IPTV 等任意播放器直接打开链接。
 
 ### 6. Web 管理界面
 
-| 路由 | 功能 |
-|------|------|
-| `/` | 仪表盘，查看所有频道状态 |
-| `/logs` | **运行日志**（实时追踪导入、检测、代理请求） |
-| `/api/import/txt` | 上传 TXT 文件（POST） |
-| `/api/import/m3u` | 上传 M3U 文件（POST） |
-| `/health` | 服务健康检查（GET），返回频道数/存活数 |
-| `/api/health/check` | 启动活性检测（POST） |
-| `/api/health/status` | 检测进度查询（GET） |
-| `/api/scheduler/status` | 定时检测配置与状态（GET） |
-| `/api/channels` | 频道列表 JSON |
-| `/api/logs` | 运行日志 JSON 接口 |
-| `/api/sources` | 已导入源文件列表 |
-| `/api/reset` | 清空所有数据（POST） |
+| 路由 | 方法 | 功能 |
+|------|------|------|
+| `/` | GET | 仪表盘，查看所有频道状态 |
+| `/logs` | GET | **运行日志**（实时追踪导入、检测、代理请求） |
+| `/health` | GET | 服务健康检查，返回频道数/存活数 |
+| `/proxy/<name>` | GET | **核心代理端点** — 302 重定向到最低延迟源 |
+| `/play/<name>` | GET | `/proxy/` 的别名 |
+| `/logo/<name>` | GET | **频道 Logo** — 返回 tvlogo/ 目录下的本地 PNG |
+| `/api/import/txt` | POST | 上传 TXT 文件 |
+| `/api/import/m3u` | POST | 上传 M3U 文件 |
+| `/api/health/check` | POST | 启动活性检测 |
+| `/api/health/status` | GET | 检测进度查询 |
+| `/api/health/schedule` | GET/POST | 定时检测配置与状态 |
+| `/api/scheduler/status` | GET | 调度器状态 |
+| `/api/channels` | GET | 频道列表 JSON |
+| `/api/logs` | GET | 运行日志 JSON 接口 |
+| `/api/sources` | GET | 已导入源文件列表 |
+| `/api/reset` | POST | 清空所有数据 |
 
 日志页面支持按类型过滤（导入/检测/代理/系统）、关键字搜索、3 秒自动刷新，每条代理请求会显示所选的具体源 URL 和延迟。
 
@@ -129,6 +143,7 @@ TVproxy/
 ├── app.py                         # Flask 主服务
 ├── requirements.txt               # Python 依赖
 ├── README.md                      # 本文件
+├── AGENTS.md                      # AI 代理开发指南
 ├── preload.py                     # 预加载脚本
 ├── channel_manager/
 │   ├── __init__.py
@@ -145,6 +160,9 @@ TVproxy/
 │   ├── __init__.py
 │   ├── txt_export.py              # TXT 订阅导出
 │   └── m3u_export.py              # M3U 订阅导出
+├── tvlogo/                        # 本地频道台标（105 个 PNG）
+├── scripts/
+│   └── fetch_logos.py             # 台标自动拉取脚本
 ├── Dockerfile                     # Docker 多架构镜像
 ├── docker-compose.yml             # Docker Compose 一键启动
 ├── .dockerignore
@@ -202,7 +220,7 @@ docker stop tvproxy && docker rm tvproxy
 
 ```bash
 # 1. 安装依赖
-pip install flask aiohttp
+pip install -r requirements.txt
 
 # 2. 进入 TVproxy 目录
 cd TVproxy
@@ -236,13 +254,24 @@ M3U: http://192.168.10.1:5000/api/export/m3u
 
 ## 依赖
 
+请见 [requirements.txt](./requirements.txt)，核心依赖：
 - Python 3.8+
 - flask>=3.0
 - aiohttp>=3.9
+- requests>=2.31
+- apscheduler>=3.10
 
 ---
 
 ## 更新日志
+
+### 2026-06-22
+- ✨ **新增**: 本地频道 Logo 系统
+  - `tvlogo/` — 从 vircloud/TVLogo + wanglindl/TVlogo 仓库收集 **105 个台标**（覆盖 98/101 频道）
+  - `GET /logo/<频道名>` — Flask 路由，从本地返回对应 PNG
+  - M3U 导出时 `tvg-logo` 自动指向 `/logo/<频道名>`
+  - 无台标频道返回 1×1 透明 PNG 占位
+  - `scripts/fetch_logos.py` — 一键拉取第三方台标库脚本
 
 ### 2026-06-21
 - 🔧 **重构**: 移除全流量代理模式（`proxy/relay.py`），仅保留 302 重定向
