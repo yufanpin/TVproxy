@@ -10,7 +10,7 @@ from urllib.parse import quote
 from collections import OrderedDict
 
 
-def export_txt(categorized_channels, proxy_base='http://localhost:5000', filepath=None, use_relay=False):
+def export_txt(categorized_channels, proxy_base='http://localhost:5000', filepath=None):
     """
     Export channels to txt format with proxy URLs.
 
@@ -20,14 +20,13 @@ def export_txt(categorized_channels, proxy_base='http://localhost:5000', filepat
         categorized_channels: OrderedDict {category: [(name, [urls]), ...]}
         proxy_base: base URL of the proxy server
         filepath: optional output file path
-        use_relay: if True, use /relay/ instead of /proxy/
 
     Returns:
         str: formatted txt content
     """
     lines = []
     first = True
-    path_prefix = '/relay/' if use_relay else '/proxy/'
+    path_prefix = '/proxy/'
 
     for cat, entries in categorized_channels.items():
         if not entries:
