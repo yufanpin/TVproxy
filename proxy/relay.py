@@ -13,7 +13,7 @@ Supports:
 
 import re
 import requests
-from urllib.parse import urljoin, urlparse, quote
+from urllib.parse import urljoin, urlparse, quote, unquote
 from flask import Response
 
 
@@ -216,11 +216,11 @@ def relay_segment(channel_name, segment_path, get_best_url_fn, request_host):
     # Check if segment_path is an encoded absolute URL
     if segment_path.startswith('http_') or segment_path.startswith('https_'):
         try:
-            seg_url = _decode_url_path(segment_path)
-            # Validate it's a proper URL
-            parsed = urlparse(seg_url)
-            if not parsed.netloc:
+            encoded_url = _decode_url_path(segment_path)
+            # urlparse can't handle percent-encoded schemes (http%3A), unquote first
+            if not urlparse(unquote(encoded_url)).netloc:
                 raise ValueError('Invalid URL')
+            seg_url = unquote(encoded_url)
         except Exception:
             seg_url = urljoin(base_url, segment_path)
     else:
