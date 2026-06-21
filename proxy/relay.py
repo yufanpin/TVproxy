@@ -26,6 +26,11 @@ PASSTHROUGH_HEADERS = {
     'Accept-Ranges',
 }
 
+# ── Default request headers for source fetches ──
+DEFAULT_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+}
+
 
 def relay_stream(source_url, timeout=30):
     """
@@ -61,7 +66,7 @@ def build_relay_response(source_url, channel_name, request_host):
         Flask Response object
     """
     try:
-        resp = requests.get(source_url, stream=True, timeout=30)
+        resp = requests.get(source_url, stream=True, timeout=30, headers=DEFAULT_HEADERS)
         resp.raise_for_status()
     except requests.exceptions.Timeout:
         return _error_response('源连接超时', 504)
@@ -222,13 +227,34 @@ def relay_segment(channel_name, segment_path, get_best_url_fn, request_host):
         seg_url = urljoin(base_url, segment_path)
 
     try:
-        resp = requests.get(seg_url, stream=True, timeout=30)
+        resp = requests.get(seg_url, stream=True, timeout=30, headers=DEFAULT_HEADERS)
         resp.raise_for_status()
     except requests.exceptions.Timeout:
         return _error_response('分片连接超时', 504)
     except requests.exceptions.RequestException as e:
         return _error_response(f'分片请求错误: {str(e)[:100]}', 502)
 
+    # ── Check if response is an HLS playlist (needs recursive URL rewriting) ──
+    content_type = resp.headers.get('Content-Type', '').lower()
+    filename = urlparse(seg_url).path.lower()
+    is_hls = ('mpegurl' in content_type or
+              'm3u8' in filename or
+              '.m3u8' in resp.url.lower())
+
+    if is_hls:
+        try:
+            content = resp.content
+            relay_base = f'{request_host.rstrip("/")}/relay/{quote(channel_name)}'
+            new_content = rewrite_hls_playlist(content, relay_base)
+            return Response(
+                new_content,
+                status=200,
+                content_type='application/vnd.apple.mpegurl; charset=utf-8',
+            )
+        except Exception as e:
+            return _error_response(f'HLS 重写失败: {str(e)[:100]}', 502)
+
+    # ── Not HLS — stream raw bytes (TS, FLV, etc.) ──
     def generate():
         try:
             for chunk in resp.iter_content(chunk_size=65536):
