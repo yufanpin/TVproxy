@@ -8,11 +8,18 @@ Each channel appears only ONCE with a proxy URL.
 import os
 from urllib.parse import quote
 
+TVLOGO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tvlogo')
 
-def _channel_logo(channel_name):
-    """Generate a logo URL for a channel."""
-    safe_name = channel_name.replace(' ', '%20').replace('&', '%26')
-    return f'https://raw.githubusercontent.com/fanmingming/live/main/img/tv/{safe_name}.png'
+
+def _channel_logo(channel_name, proxy_base=''):
+    """Generate a logo URL for a channel, pointing to local tvlogo/ serving."""
+    logo_path = os.path.join(TVLOGO_DIR, f'{channel_name}.png')
+    if os.path.exists(logo_path):
+        # Serve via Flask /logo/ route
+        safe = quote(channel_name, safe='')
+        return f'{proxy_base}/logo/{safe}'
+    # No local logo → empty string (player will hide logo or show nothing)
+    return ''
 
 
 def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepath=None):
@@ -42,7 +49,7 @@ def export_m3u(categorized_channels, proxy_base='http://localhost:5000', filepat
         lines.append(f'# {cat}')
 
         for ch_name, _ in entries:
-            logo = _channel_logo(ch_name)
+            logo = _channel_logo(ch_name, proxy_base=proxy_base)
             proxy_url = f'{proxy_base}{path_prefix}{quote(ch_name)}'
             lines.append(
                 f'#EXTINF:-1 tvg-id="{ch_name}" tvg-name="{ch_name}" '

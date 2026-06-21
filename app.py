@@ -19,7 +19,7 @@ from datetime import datetime
 from collections import OrderedDict
 from urllib.parse import unquote, quote
 
-from flask import Flask, render_template, request, jsonify, send_file, redirect, Response
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, redirect, Response
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -511,6 +511,27 @@ def proxy_channel(channel_name):
 def play_channel(channel_name):
     """Alias for /proxy/."""
     return proxy_channel(channel_name)
+
+
+# ── Routes: Logo ──
+
+TVLOGO_DIR = os.path.join(BASE_DIR, 'tvlogo')
+
+@app.route('/logo/<path:channel_name>')
+def serve_logo(channel_name):
+    """Serve local TV channel logo from tvlogo/ directory."""
+    from urllib.parse import unquote
+    name = unquote(channel_name)
+    # Normalize: try exact name, fallback to sanitized filename
+    logo_file = f'{name}.png'
+    logo_path = os.path.join(TVLOGO_DIR, logo_file)
+    if os.path.exists(logo_path):
+        return send_from_directory(TVLOGO_DIR, logo_file)
+    # Return 1x1 transparent PNG as fallback
+    return Response(
+        b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82',
+        mimetype='image/png'
+    ), 200
 
 
 # ── Routes: Export Subscription ──
