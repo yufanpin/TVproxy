@@ -1,0 +1,50 @@
+name: Mirror akiralereal/iptv to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: 'Image tag to mirror'
+        required: true
+        default: 'latest'
+        type: string
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME || '' }}
+          password: ${{ secrets.DOCKERHUB_TOKEN || '' }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Pull source image
+        run: |
+          docker pull akiralereal/iptv:${{ inputs.source_tag }}
+
+      - name: Tag and push to GHCR
+        run: |
+          IMAGE=ghcr.io/${{ github.repository }}/iptv:${{ inputs.source_tag }}
+          docker tag akiralereal/iptv:${{ inputs.source_tag }} $IMAGE
+          docker push $IMAGE
+
+      - name: Also push as latest
+        if: ${{ inputs.source_tag == 'latest' }}
+        run: |
+          docker tag akiralereal/iptv:latest ghcr.io/${{ github.repository }}/iptv:latest
+          docker push ghcr.io/${{ github.repository }}/iptv:latest
