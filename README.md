@@ -205,7 +205,9 @@ docker pull ghcr.io/yufanpin/tvproxy:latest
 
 # 启动（推荐：named volume，免去路径问题）
 docker run -d -p 5000:5000 --restart unless-stopped \
-  -v tvproxy-data:/app/data --name tvproxy ghcr.io/yufanpin/tvproxy:latest
+  -v tvproxy-data:/app/data \
+  -v /etc/localtime:/etc/localtime:ro \
+  --name tvproxy ghcr.io/yufanpin/tvproxy:latest
 
 # 或者用绝对路径挂载宿主机目录
 # docker run -d -p 5000:5000 --restart unless-stopped \
@@ -281,6 +283,10 @@ M3U: http://192.168.10.1:5000/api/export/m3u
   - `app.py` — `relay_mode` 状态持久化、`/relay/<channel>` 路由、切换 API
   - `exporter/*.py` — 订阅输出根据 relay_mode 自动切换 `/proxy/` ↔ `/relay/`
   - `templates/index.html` — 中继模式开关按钮
+- 🐛 **修复**: 日志时间显示 UTC 问题（Docker 容器默认时区 UTC，导致日志面板时间比本地慢 8 小时）
+  - `docker-compose.yml` — 挂载 `/etc/localtime`，容器自动继承宿主机时区
+  - `app.py` — `datetime.now()` → `datetime.now().astimezone()`，日志格式增加月-日
+  - `templates/logs.html` — 时间列宽适配新格式
 
 ### 2026-06-20
 - 🐛 **修复**: 面板全显示绿色（`alive = urls|length` 永远=总数，未查健康检测结果）

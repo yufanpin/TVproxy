@@ -8,4 +8,5 @@ services:
       - "5000:5000"
     volumes:
       - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro   # 自动使用宿主机时区
     restart: unless-stopped

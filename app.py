@@ -79,7 +79,7 @@ def add_log(typ, message, detail=''):
     """Add an entry to the in-memory ring-buffer log."""
     from datetime import datetime
     state['logs'].append({
-        'time': datetime.now().strftime('%H:%M:%S'),
+        'time': datetime.now().astimezone().strftime('%m-%d %H:%M:%S'),
         'type': typ,
         'message': message,
         'detail': detail,
@@ -142,7 +142,7 @@ def process_entries(entries):
         for url in urls:
             if url not in state['channels'][name]:
                 state['channels'][name].append(url)
-    state['last_updated'] = datetime.now().isoformat()
+    state['last_updated'] = datetime.now().astimezone().isoformat()
     save_state()
     return merged
 
@@ -329,7 +329,7 @@ def trigger_health_check():
             state['health']['alive'] = alive
             state['health']['dead'] = dead
             state['health']['latencies'] = latencies
-            state['health']['last_check'] = datetime.now().isoformat()
+            state['health']['last_check'] = datetime.now().astimezone().isoformat()
             state['health_running'] = False
             state['best_cache'] = {}  # Clear cache, new data available
             save_state()
@@ -379,7 +379,7 @@ def run_scheduled_check():
             state['health']['alive'] = alive
             state['health']['dead'] = dead
             state['health']['latencies'] = latencies
-            state['health']['last_check'] = datetime.now().isoformat()
+            state['health']['last_check'] = datetime.now().astimezone().isoformat()
             state['health_running'] = False
             state['best_cache'] = {}
             save_state()
