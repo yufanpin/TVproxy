@@ -23,7 +23,7 @@ def categorize(name):
     if name.endswith('卫视') or '卫视' in name:
         return '卫视频道'
     if name in ['凤凰中文', '凤凰资讯', '凤凰香港']:
-        return '卫视频道'
+        return '其他频道'
     # Kids channels
     kids_keywords = ['卡通', '动画', '宝贝', '少儿', '炫动']
     if any(k in name for k in kids_keywords):

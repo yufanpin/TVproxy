@@ -6,7 +6,7 @@ Maps various naming conventions to a standard form.
 
 import re
 
-# ── CCTV Numbered Channels ──
+    # ── CCTV Numbered Channels ──
 CCTV_STANDARD = {
     '1': 'CCTV-1 综合',
     '2': 'CCTV-2 财经',
@@ -26,6 +26,7 @@ CCTV_STANDARD = {
     '15': 'CCTV-15 音乐',
     '16': 'CCTV-16 奥林匹克',
     '17': 'CCTV-17 农业农村',
+    '4K': 'CCTV-4K 超高清',
 }
 
 CCTV_PAID_STANDARD = {
@@ -169,6 +170,14 @@ def normalize(name):
     
     # ── CCTV numbered channels ──
     # Match patterns like: CCTV1, CCTV-1, CCTV-1综合, cctv1, CCTV 1 综合
+    # Handle CCTV-4K separately BEFORE the general pattern (avoid 4K→4 capture)
+    m = re.match(r'^[Cc][Cc][Tt][Vv][\s-]*4K\b\s*(.*)', name)
+    if m:
+        suffix = m.group(1).strip()
+        if suffix:
+            return f'CCTV-4K {suffix}', False
+        return CCTV_STANDARD['4K'], False
+
     m = re.match(r'^[Cc][Cc][Tt][Vv][\s-]*(\d[\d+]*)\s*(.*)', name)
     if m:
         num = m.group(1).strip()

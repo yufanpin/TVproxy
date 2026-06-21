@@ -298,6 +298,12 @@ def import_m3u():
 
 # ── Routes: Health Check ──
 
+@app.route('/health')
+def health_check():
+    """Simple health check endpoint for Docker/monitoring."""
+    return jsonify({'status': 'ok', 'channels': len(state['channels'])})
+
+
 @app.route('/api/health/check', methods=['POST'])
 def trigger_health_check():
     """Start health check in background."""
@@ -412,6 +418,18 @@ def init_scheduler():
     next_run = state['scheduler_job'].next_run_time
     add_log('scheduler', f'定时检测已开启', f'每日 {hour:02d}:{minute:02d} 执行' +
             (f'，下次运行: {next_run.strftime("%m-%d %H:%M")}' if next_run else ''))
+
+
+@app.route('/api/scheduler/status')
+def scheduler_status():
+    """Get scheduler status (alias for /api/health/schedule GET)."""
+    job = state.get('scheduler_job')
+    return jsonify({
+        'enabled': state['scheduler_enabled'],
+        'hour': state['scheduler_hour'],
+        'minute': state['scheduler_minute'],
+        'next_run': job.next_run_time.strftime('%Y-%m-%d %H:%M:%S') if job and job.next_run_time else None,
+    })
 
 
 @app.route('/api/health/schedule', methods=['GET', 'POST'])
